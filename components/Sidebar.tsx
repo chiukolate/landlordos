@@ -26,7 +26,7 @@ const navigation = [
   },
   {
     name: "Expenses",
-    href: "#",
+    href: "/expenses",
     icon: "−",
   },
   {
