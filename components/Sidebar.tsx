@@ -21,7 +21,7 @@ const navigation = [
   },
   {
     name: "Payments",
-    href: "#",
+    href: "/payments",
     icon: "₱",
   },
   {
@@ -62,7 +62,8 @@ export default function Sidebar() {
             const isActive =
               item.href === "/"
                 ? pathname === "/"
-                : !isDisabled && pathname.startsWith(item.href);
+                : !isDisabled &&
+                  pathname.startsWith(item.href);
 
             if (isDisabled) {
               return (
