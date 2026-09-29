@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
@@ -23,14 +24,7 @@ export default async function Dashboard() {
           start_date,
           monthly_rent,
           tenant_id,
-          unit_id,
-          tenants (
-            first_name,
-            last_name
-          ),
-          units (
-            unit_number
-          )
+          unit_id
         `
       )
       .eq("status", "ACTIVE")
@@ -54,6 +48,41 @@ export default async function Dashboard() {
                 unitsError?.message ||
                 leasesError?.message ||
                 "Unknown database error"}
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const tenantIds =
+    activeLeases
+      ?.map((lease) => lease.tenant_id)
+      .filter(Boolean) ?? [];
+
+  const { data: tenants, error: tenantsError } =
+    tenantIds.length > 0
+      ? await supabase
+          .from("tenants")
+          .select("id, first_name, last_name")
+          .in("id", tenantIds)
+      : { data: [], error: null };
+
+  if (tenantsError) {
+    return (
+      <main className="min-h-screen bg-gray-100 p-8">
+        <div className="mx-auto max-w-7xl">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Dashboard
+          </h1>
+
+          <div className="mt-6 rounded-xl bg-red-50 p-6">
+            <h2 className="font-semibold text-red-800">
+              Unable to load tenant data
+            </h2>
+
+            <p className="mt-2 text-sm text-red-700">
+              {tenantsError.message}
             </p>
           </div>
         </div>
@@ -101,6 +130,20 @@ export default async function Dashboard() {
   ).length;
 
   const activeLeaseCount = activeLeases?.length ?? 0;
+
+  const tenantById = new Map(
+    (tenants ?? []).map((tenant) => [
+      tenant.id,
+      tenant,
+    ])
+  );
+
+  const unitById = new Map(
+    (units ?? []).map((unit) => [
+      unit.id,
+      unit,
+    ])
+  );
 
   return (
     <main className="min-h-screen bg-gray-100 p-8">
@@ -288,42 +331,63 @@ export default async function Dashboard() {
                   </thead>
 
                   <tbody className="divide-y divide-gray-200">
-                    {activeLeases.map((lease) => (
-                      <tr key={lease.id}>
-                        <td className="px-4 py-3">
-                          {lease.tenants?.[0] ? (
-                            <Link
-                              href={`/tenants/${lease.tenant_id}`}
-                              className="font-medium text-gray-900 hover:underline"
-                            >
-                              {lease.tenants[0]?.first_name}{" "}
-                              {lease.tenants[0]?.last_name}
-                            </Link>
-                          ) : (
-                            "Unknown Tenant"
-                          )}
-                        </td>
+                    {activeLeases.map((lease) => {
+                      const tenant = tenantById.get(
+                        lease.tenant_id
+                      );
 
-                        <td className="px-4 py-3">
-                          {lease.units?.[0]
-                            ? `Unit ${lease.units[0].unit_number}`
-                            : "Unknown Unit"}
-                        </td>
+                      const unit = unitById.get(
+                        lease.unit_id
+                      );
 
-                        <td className="px-4 py-3 font-medium text-gray-900">
-                          ₱
-                          {Number(
-                            lease.monthly_rent
-                          ).toLocaleString()}
-                        </td>
+                      return (
+                        <tr key={lease.id}>
+                          <td className="px-4 py-3">
+                            {tenant ? (
+                              <Link
+                                href={`/tenants/${tenant.id}`}
+                                className="font-medium text-gray-900 hover:underline"
+                              >
+                                {tenant.first_name}{" "}
+                                {tenant.last_name}
+                              </Link>
+                            ) : (
+                              <span className="font-medium text-red-600">
+                                Unknown Tenant
+                              </span>
+                            )}
+                          </td>
 
-                        <td className="px-4 py-3 text-gray-600">
-                          {new Date(
-                            lease.start_date
-                          ).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-4 py-3">
+                            {unit ? (
+                              <Link
+                                href={`/properties/units/${unit.unit_number}`}
+                                className="font-medium text-gray-900 hover:underline"
+                              >
+                                Unit {unit.unit_number}
+                              </Link>
+                            ) : (
+                              <span className="font-medium text-red-600">
+                                Unknown Unit
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3 font-medium text-gray-900">
+                            ₱
+                            {Number(
+                              lease.monthly_rent
+                            ).toLocaleString()}
+                          </td>
+
+                          <td className="px-4 py-3 text-gray-600">
+                            {new Date(
+                              lease.start_date
+                            ).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
