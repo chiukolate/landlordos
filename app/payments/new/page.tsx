@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -26,7 +26,7 @@ type Lease = {
   status: string;
 };
 
-export default function NewPaymentPage() {
+function NewPaymentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -274,7 +274,6 @@ export default function NewPaymentPage() {
           className="rounded-xl bg-white p-6 shadow-sm"
         >
           <div className="space-y-5">
-
             {/* Tenant */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -500,5 +499,23 @@ export default function NewPaymentPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function NewPaymentPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-gray-100 p-8">
+          <div className="mx-auto max-w-2xl">
+            <p className="text-sm text-gray-600">
+              Loading payment form...
+            </p>
+          </div>
+        </main>
+      }
+    >
+      <NewPaymentForm />
+    </Suspense>
   );
 }

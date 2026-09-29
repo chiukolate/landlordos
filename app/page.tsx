@@ -290,13 +290,13 @@ export default async function Dashboard() {
                     {activeLeases.map((lease) => (
                       <tr key={lease.id}>
                         <td className="px-4 py-3">
-                          {lease.tenants ? (
+                          {lease.tenants?.[0] ? (
                             <Link
                               href={`/tenants/${lease.tenant_id}`}
                               className="font-medium text-gray-900 hover:underline"
                             >
-                              {lease.tenants.first_name}{" "}
-                              {lease.tenants.last_name}
+                              {lease.tenants[0]?.first_name}{" "}
+                              {lease.tenants[0]?.last_name}
                             </Link>
                           ) : (
                             "Unknown Tenant"
@@ -304,8 +304,8 @@ export default async function Dashboard() {
                         </td>
 
                         <td className="px-4 py-3">
-                          {lease.units
-                            ? `Unit ${lease.units.unit_number}`
+                          {lease.units?.[0]
+                            ? `Unit ${lease.units[0].unit_number}`
                             : "Unknown Unit"}
                         </td>
 

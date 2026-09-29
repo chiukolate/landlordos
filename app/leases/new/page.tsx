@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -19,7 +19,7 @@ type Unit = {
   status: string;
 };
 
-export default function NewLeasePage() {
+function NewLeaseForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -271,7 +271,6 @@ export default function NewLeasePage() {
           className="rounded-xl bg-white p-6 shadow-sm"
         >
           <div className="space-y-5">
-
             {/* Tenant */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -481,7 +480,6 @@ export default function NewLeasePage() {
                 className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
               />
             </div>
-
           </div>
 
           {error && (
@@ -513,5 +511,23 @@ export default function NewLeasePage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function NewLeasePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-gray-100 p-8">
+          <div className="mx-auto max-w-2xl">
+            <p className="text-sm text-gray-600">
+              Loading lease form...
+            </p>
+          </div>
+        </main>
+      }
+    >
+      <NewLeaseForm />
+    </Suspense>
   );
 }

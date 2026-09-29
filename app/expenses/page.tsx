@@ -14,8 +14,8 @@ type Expense = {
   notes: string | null;
   property_id: string;
   properties: {
-    name: string;
-  } | null;
+  name: string;
+}[] | null;
 };
 
 export default function ExpensesPage() {
@@ -172,7 +172,7 @@ export default function ExpensesPage() {
                     </td>
 
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
-                      {expense.properties?.name ?? "Unknown Property"}
+                      {expense.properties?.[0]?.name ?? "Unknown Property"}
                     </td>
 
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">

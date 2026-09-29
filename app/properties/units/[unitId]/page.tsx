@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+
 import { supabase } from "@/lib/supabase";
+
 import UnitDetails from "./UnitDetails";
 
 export default async function UnitPage({
@@ -49,7 +51,13 @@ export default async function UnitPage({
     .order("start_date", { ascending: false })
     .limit(1);
 
-  const activeLease = leases?.[0] ?? null;
+  const activeLease = leases?.[0]
+    ? {
+        ...leases[0],
+        tenants: leases[0].tenants?.[0] ?? null,
+        units: leases[0].units?.[0] ?? null,
+      }
+    : null;
 
   return (
     <main className="min-h-screen bg-gray-100 p-8">
