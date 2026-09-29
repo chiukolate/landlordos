@@ -1,0 +1,238 @@
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+
+export const dynamic = "force-dynamic";
+
+type Tenant = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  email: string | null;
+  created_at: string;
+};
+
+type Lease = {
+  tenant_id: string;
+  status: string;
+};
+
+export default async function TenantsPage() {
+  const { data: tenants, error: tenantsError } = await supabase
+    .from("tenants")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const { data: leases, error: leasesError } = await supabase
+    .from("leases")
+    .select("tenant_id, status");
+
+  if (tenantsError || leasesError) {
+    const errorMessage =
+      tenantsError?.message ||
+      leasesError?.message ||
+      "Unknown database error";
+
+    return (
+      <main className="min-h-screen bg-gray-100 p-8">
+        <div className="mx-auto max-w-7xl">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Tenants
+          </h1>
+
+          <div className="mt-6 rounded-xl bg-red-50 p-6">
+            <h2 className="font-semibold text-red-800">
+              Unable to load tenant data
+            </h2>
+
+            <p className="mt-2 text-sm text-red-700">
+              {errorMessage}
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const activeTenantIds = new Set(
+    (leases ?? [])
+      .filter((lease: Lease) => lease.status === "ACTIVE")
+      .map((lease: Lease) => lease.tenant_id)
+  );
+
+  const activeTenants =
+    (tenants as Tenant[] | null)?.filter((tenant) =>
+      activeTenantIds.has(tenant.id)
+    ) ?? [];
+
+  const previousTenants =
+    (tenants as Tenant[] | null)?.filter(
+      (tenant) => !activeTenantIds.has(tenant.id)
+    ) ?? [];
+
+  function TenantTable({
+    tenantList,
+  }: {
+    tenantList: Tenant[];
+  }) {
+    return (
+      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-4 font-medium text-gray-600">
+                Name
+              </th>
+
+              <th className="px-6 py-4 font-medium text-gray-600">
+                Phone
+              </th>
+
+              <th className="px-6 py-4 font-medium text-gray-600">
+                Email
+              </th>
+
+              <th className="px-6 py-4 font-medium text-gray-600">
+                Date Added
+              </th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-gray-200">
+            {tenantList.map((tenant) => (
+              <tr key={tenant.id}>
+                <td className="px-6 py-4">
+                  <Link
+                    href={`/tenants/${tenant.id}`}
+                    className="font-medium text-gray-900 hover:underline"
+                  >
+                    {tenant.first_name} {tenant.last_name}
+                  </Link>
+                </td>
+
+                <td className="px-6 py-4 text-gray-600">
+                  {tenant.phone || "—"}
+                </td>
+
+                <td className="px-6 py-4 text-gray-600">
+                  {tenant.email || "—"}
+                </td>
+
+                <td className="px-6 py-4 text-gray-600">
+                  {new Date(
+                    tenant.created_at
+                  ).toLocaleDateString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-100 p-8">
+      <div className="mx-auto max-w-7xl">
+        {/* Header */}
+        <header className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Tenants
+            </h1>
+
+            <p className="mt-1 text-gray-600">
+              Manage your tenant records.
+            </p>
+          </div>
+
+          <Link
+            href="/tenants/new"
+            className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            Add Tenant
+          </Link>
+        </header>
+
+        {/* Active Tenants */}
+        <section>
+          <div className="mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Active Tenants
+              </h2>
+
+              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                {activeTenants.length}
+              </span>
+            </div>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Tenants with an active lease.
+            </p>
+          </div>
+
+          {activeTenants.length > 0 ? (
+            <TenantTable tenantList={activeTenants} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
+              <p className="font-medium text-gray-900">
+                No active tenants
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                There are currently no tenants with an active
+                lease.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* Previous Tenants */}
+        <section className="mt-10">
+          <div className="mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Previous Tenants
+              </h2>
+
+              <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-600">
+                {previousTenants.length}
+              </span>
+            </div>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Tenants who do not currently have an active
+              lease.
+            </p>
+          </div>
+
+          {previousTenants.length > 0 ? (
+            <TenantTable tenantList={previousTenants} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
+              <p className="font-medium text-gray-900">
+                No previous tenants
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Previous tenants will appear here after their
+                leases end.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* Back to Dashboard */}
+        <div className="mt-8">
+          <Link
+            href="/"
+            className="text-sm font-medium text-gray-600 hover:text-gray-900"
+          >
+            ← Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
