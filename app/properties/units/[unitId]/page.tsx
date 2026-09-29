@@ -33,17 +33,7 @@ export default async function UnitPage({
         status,
         notes,
         unit_id,
-        tenants (
-          id,
-          first_name,
-          last_name,
-          phone,
-          email
-        ),
-        units (
-          unit_number,
-          floor
-        )
+        tenant_id
       `
     )
     .eq("unit_id", unit.id)
@@ -51,13 +41,31 @@ export default async function UnitPage({
     .order("start_date", { ascending: false })
     .limit(1);
 
-  const activeLease = leases?.[0]
-    ? {
-        ...leases[0],
-        tenants: leases[0].tenants?.[0] ?? null,
-        units: leases[0].units?.[0] ?? null,
-      }
-    : null;
+  let activeLease = null;
+
+  if (leases?.[0]) {
+    const lease = leases[0];
+
+    const { data: tenant, error: tenantError } =
+      await supabase
+        .from("tenants")
+        .select(
+          `
+            id,
+            first_name,
+            last_name,
+            phone,
+            email
+          `
+        )
+        .eq("id", lease.tenant_id)
+        .single();
+
+    activeLease = {
+      ...lease,
+      tenants: tenantError ? null : tenant,
+    };
+  }
 
   return (
     <main className="min-h-screen bg-gray-100 p-8">
