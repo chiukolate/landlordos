@@ -31,7 +31,7 @@ const navigation = [
   },
   {
     name: "Maintenance",
-    href: "#",
+    href: "/maintenance",
     icon: "⚒",
   },
 ];
