@@ -42,6 +42,25 @@ export default async function TenantDetailsPage({
     .eq("tenant_id", tenant.id)
     .order("start_date", { ascending: false });
 
+  const { data: payments, error: paymentsError } =
+    await supabase
+      .from("payments")
+      .select(
+        `
+          id,
+          amount,
+          payment_date,
+          payment_method,
+          notes,
+          unit_id,
+          units (
+            unit_number
+          )
+        `
+      )
+      .eq("tenant_id", tenant.id)
+      .order("payment_date", { ascending: false });
+
   const activeLease =
     leases?.find((lease) => lease.status === "ACTIVE") ?? null;
 
@@ -308,6 +327,122 @@ export default async function TenantDetailsPage({
 
               <p className="mt-1 text-sm text-gray-500">
                 This tenant does not currently have an active lease.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* Payment History */}
+        <section className="mt-6 rounded-xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">
+                Payment History
+              </h2>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Recorded rent payments
+              </p>
+            </div>
+
+            {activeLease && (
+              <Link
+                href={`/payments/new?tenantId=${tenant.id}`}
+                className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+              >
+                + Record Payment
+              </Link>
+            )}
+          </div>
+
+          {paymentsError ? (
+            <div className="mt-6 rounded-lg bg-red-50 p-4">
+              <p className="text-sm text-red-700">
+                Unable to load payment history.
+              </p>
+
+              <p className="mt-1 text-xs text-red-600">
+                {paymentsError.message}
+              </p>
+            </div>
+          ) : payments && payments.length > 0 ? (
+            <div className="mt-6 overflow-hidden rounded-lg border border-gray-200">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 font-medium text-gray-600">
+                      Date
+                    </th>
+
+                    <th className="px-4 py-3 font-medium text-gray-600">
+                      Amount
+                    </th>
+
+                    <th className="px-4 py-3 font-medium text-gray-600">
+                      Method
+                    </th>
+
+                    <th className="px-4 py-3 font-medium text-gray-600">
+                      Unit
+                    </th>
+
+                    <th className="px-4 py-3 font-medium text-gray-600">
+                      Notes
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-200">
+                  {payments.map((payment) => {
+                    const paymentUnit = payment.units
+                      ? Array.isArray(payment.units)
+                        ? payment.units[0]
+                        : payment.units
+                      : null;
+
+                    return (
+                      <tr key={payment.id}>
+                        <td className="px-4 py-3 text-gray-600">
+                          {new Date(
+                            payment.payment_date
+                          ).toLocaleDateString()}
+                        </td>
+
+                        <td className="px-4 py-3 font-semibold text-gray-900">
+                          ₱
+                          {Number(
+                            payment.amount
+                          ).toLocaleString()}
+                        </td>
+
+                        <td className="px-4 py-3 text-gray-600">
+                          {payment.payment_method
+                            .replace("_", " ")}
+                        </td>
+
+                        <td className="px-4 py-3 text-gray-600">
+                          {paymentUnit
+                            ? `Unit ${paymentUnit.unit_number}`
+                            : "Unknown"}
+                        </td>
+
+                        <td className="px-4 py-3 text-gray-600">
+                          {payment.notes || "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-lg border border-dashed border-gray-300 p-6 text-center">
+              <p className="font-medium text-gray-900">
+                No payments recorded
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                No rent payments have been recorded for this tenant yet.
               </p>
             </div>
           )}
