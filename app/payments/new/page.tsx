@@ -26,6 +26,17 @@ type Lease = {
   status: string;
 };
 
+type MonthlyBill = {
+  id: string;
+  unit_id: string;
+  billing_month: string;
+  rent_amount: number;
+  electricity_amount: number;
+  adjustment: number;
+  total_amount_due: number;
+  status: "UNPAID" | "PARTIAL" | "PAID";
+};
+
 function NewPaymentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,9 +46,11 @@ function NewPaymentForm() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
+  const [bills, setBills] = useState<MonthlyBill[]>([]);
 
   const [loadingTenants, setLoadingTenants] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadingBills, setLoadingBills] = useState(false);
 
   const [tenantId, setTenantId] = useState(
     tenantIdFromUrl ?? ""
@@ -45,6 +58,8 @@ function NewPaymentForm() {
 
   const [unitId, setUnitId] = useState("");
   const [leaseId, setLeaseId] = useState("");
+  const [billId, setBillId] = useState("");
+
   const [amount, setAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
   const [paymentMethod, setPaymentMethod] =
@@ -125,6 +140,51 @@ function NewPaymentForm() {
     loadPaymentData();
   }, []);
 
+  useEffect(() => {
+    async function loadBills() {
+      if (!unitId) {
+        setBills([]);
+        setBillId("");
+        return;
+      }
+
+      setLoadingBills(true);
+      setError("");
+
+      const { data, error } = await supabase
+        .from("monthly_bills")
+        .select(
+          `
+            id,
+            unit_id,
+            billing_month,
+            rent_amount,
+            electricity_amount,
+            adjustment,
+            total_amount_due,
+            status
+          `
+        )
+        .eq("unit_id", unitId)
+        .order("billing_month", {
+          ascending: false,
+        });
+
+      if (error) {
+        setError(
+          `Unable to load monthly bills: ${error.message}`
+        );
+        setBills([]);
+      } else {
+        setBills(data ?? []);
+      }
+
+      setLoadingBills(false);
+    }
+
+    loadBills();
+  }, [unitId]);
+
   const selectedTenant = tenants.find(
     (tenant) => tenant.id === tenantId
   );
@@ -141,6 +201,29 @@ function NewPaymentForm() {
     (unit) => unit.id === unitId
   );
 
+  const selectedBill = bills.find(
+    (bill) => bill.id === billId
+  );
+
+  function formatMonth(value: string) {
+    const date = new Date(`${value}T00:00:00`);
+
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  function formatCurrency(value: number) {
+    return `₱${Number(value).toLocaleString(
+      "en-PH",
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }
+    )}`;
+  }
+
   function handleTenantChange(
     event: React.ChangeEvent<HTMLSelectElement>
   ) {
@@ -149,6 +232,8 @@ function NewPaymentForm() {
     setTenantId(newTenantId);
     setUnitId("");
     setLeaseId("");
+    setBillId("");
+    setBills([]);
     setAmount("");
     setError("");
   }
@@ -159,6 +244,8 @@ function NewPaymentForm() {
     const newLeaseId = event.target.value;
 
     setLeaseId(newLeaseId);
+    setBillId("");
+    setAmount("");
 
     const lease = leases.find(
       (item) => item.id === newLeaseId
@@ -166,9 +253,29 @@ function NewPaymentForm() {
 
     if (lease) {
       setUnitId(lease.unit_id);
-      setAmount(String(lease.monthly_rent));
     } else {
       setUnitId("");
+    }
+
+    setError("");
+  }
+
+  function handleBillChange(
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) {
+    const newBillId = event.target.value;
+
+    setBillId(newBillId);
+
+    const bill = bills.find(
+      (item) => item.id === newBillId
+    );
+
+    if (bill) {
+      setAmount(
+        String(bill.total_amount_due)
+      );
+    } else {
       setAmount("");
     }
 
@@ -189,6 +296,11 @@ function NewPaymentForm() {
 
     if (!leaseId) {
       setError("Please select an active lease.");
+      return;
+    }
+
+    if (!billId) {
+      setError("Please select a monthly bill.");
       return;
     }
 
@@ -221,14 +333,32 @@ function NewPaymentForm() {
       return;
     }
 
+    if (!selectedBill) {
+      setError(
+        "Unable to verify the selected monthly bill."
+      );
+      return;
+    }
+
+    if (
+      selectedBill.status === "PAID"
+    ) {
+      setError(
+        "This monthly bill is already fully paid."
+      );
+      return;
+    }
+
     setSaving(true);
 
+    // Save the payment and attach it to the monthly bill.
     const { error: insertError } = await supabase
       .from("payments")
       .insert({
         tenant_id: tenantId,
         unit_id: selectedLease.unit_id,
         lease_id: selectedLease.id,
+        monthly_bill_id: selectedBill.id,
         amount: paymentAmount,
         payment_date: paymentDate,
         payment_method: paymentMethod,
@@ -237,6 +367,61 @@ function NewPaymentForm() {
 
     if (insertError) {
       setError(insertError.message);
+      setSaving(false);
+      return;
+    }
+
+    // Get all payments attached to this bill.
+    const { data: billPayments, error: paymentsError } =
+      await supabase
+        .from("payments")
+        .select("amount")
+        .eq(
+          "monthly_bill_id",
+          selectedBill.id
+        );
+
+    if (paymentsError) {
+      setError(
+        `Payment was recorded, but the bill status could not be updated: ${paymentsError.message}`
+      );
+      setSaving(false);
+      return;
+    }
+
+    const totalPaid = (billPayments ?? []).reduce(
+      (sum, payment) =>
+        sum + Number(payment.amount),
+      0
+    );
+
+    let newStatus:
+      | "UNPAID"
+      | "PARTIAL"
+      | "PAID";
+
+    if (totalPaid <= 0) {
+      newStatus = "UNPAID";
+    } else if (
+      totalPaid >=
+      Number(selectedBill.total_amount_due)
+    ) {
+      newStatus = "PAID";
+    } else {
+      newStatus = "PARTIAL";
+    }
+
+    const { error: updateError } = await supabase
+      .from("monthly_bills")
+      .update({
+        status: newStatus,
+      })
+      .eq("id", selectedBill.id);
+
+    if (updateError) {
+      setError(
+        `Payment was recorded, but the bill status could not be updated: ${updateError.message}`
+      );
       setSaving(false);
       return;
     }
@@ -265,7 +450,7 @@ function NewPaymentForm() {
           </h1>
 
           <p className="mt-1 text-gray-600">
-            Record a rent payment from a tenant.
+            Record a tenant payment against a monthly bill.
           </p>
         </header>
 
@@ -275,6 +460,7 @@ function NewPaymentForm() {
         >
           <div className="space-y-5">
             {/* Tenant */}
+
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Tenant
@@ -315,6 +501,7 @@ function NewPaymentForm() {
             </div>
 
             {/* Lease */}
+
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Active Lease
@@ -352,10 +539,9 @@ function NewPaymentForm() {
                       {unit
                         ? `Unit ${unit.unit_number}`
                         : "Unknown Unit"}{" "}
-                      — ₱
-                      {Number(
-                        lease.monthly_rent
-                      ).toLocaleString()}
+                      — {formatCurrency(
+                        Number(lease.monthly_rent)
+                      )}
                     </option>
                   );
                 })}
@@ -363,6 +549,7 @@ function NewPaymentForm() {
             </div>
 
             {/* Unit */}
+
             {selectedUnit && (
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -376,7 +563,128 @@ function NewPaymentForm() {
               </div>
             )}
 
+            {/* Monthly Bill */}
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                Monthly Bill
+              </label>
+
+              <select
+                value={billId}
+                onChange={handleBillChange}
+                disabled={
+                  loadingBills || !unitId
+                }
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 disabled:bg-gray-50"
+              >
+                <option value="">
+                  {loadingBills
+                    ? "Loading bills..."
+                    : !unitId
+                      ? "Select an active lease first"
+                      : bills.length === 0
+                        ? "No monthly bills for this unit"
+                        : "Select monthly bill"}
+                </option>
+
+                {bills.map((bill) => (
+                  <option
+                    key={bill.id}
+                    value={bill.id}
+                    disabled={bill.status === "PAID"}
+                  >
+                    {formatMonth(
+                      bill.billing_month
+                    )}{" "}
+                    — Due{" "}
+                    {formatCurrency(
+                      Number(
+                        bill.total_amount_due
+                      )
+                    )}{" "}
+                    — {bill.status}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Selected Bill Summary */}
+
+            {selectedBill && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-medium text-gray-900">
+                  {formatMonth(
+                    selectedBill.billing_month
+                  )}
+                </p>
+
+                <div className="mt-3 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">
+                      Rent
+                    </span>
+
+                    <span className="font-medium text-gray-900">
+                      {formatCurrency(
+                        Number(
+                          selectedBill.rent_amount
+                        )
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">
+                      Electricity
+                    </span>
+
+                    <span className="font-medium text-gray-900">
+                      {formatCurrency(
+                        Number(
+                          selectedBill.electricity_amount
+                        )
+                      )}
+                    </span>
+                  </div>
+
+                  {Number(
+                    selectedBill.adjustment
+                  ) !== 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">
+                        Adjustment
+                      </span>
+
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(
+                          Number(
+                            selectedBill.adjustment
+                          )
+                        )}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between border-t border-gray-200 pt-2">
+                    <span className="font-medium text-gray-900">
+                      Total Due
+                    </span>
+
+                    <span className="font-semibold text-gray-900">
+                      {formatCurrency(
+                        Number(
+                          selectedBill.total_amount_due
+                        )
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Amount */}
+
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Payment Amount
@@ -388,15 +696,22 @@ function NewPaymentForm() {
                 step="0.01"
                 value={amount}
                 onChange={(event) => {
-                  setAmount(event.target.value);
+                  setAmount(
+                    event.target.value
+                  );
                   setError("");
                 }}
-                placeholder="8500"
+                placeholder="5000"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
               />
+
+              <p className="mt-1 text-xs text-gray-500">
+                The amount can be less than the bill total for a partial payment.
+              </p>
             </div>
 
             {/* Payment Date */}
+
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Payment Date
@@ -406,7 +721,9 @@ function NewPaymentForm() {
                 type="date"
                 value={paymentDate}
                 onChange={(event) => {
-                  setPaymentDate(event.target.value);
+                  setPaymentDate(
+                    event.target.value
+                  );
                   setError("");
                 }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
@@ -414,6 +731,7 @@ function NewPaymentForm() {
             </div>
 
             {/* Payment Method */}
+
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Payment Method
@@ -447,6 +765,7 @@ function NewPaymentForm() {
             </div>
 
             {/* Notes */}
+
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Notes
@@ -455,7 +774,9 @@ function NewPaymentForm() {
               <textarea
                 value={notes}
                 onChange={(event) =>
-                  setNotes(event.target.value)
+                  setNotes(
+                    event.target.value
+                  )
                 }
                 rows={4}
                 placeholder="Optional payment notes..."
@@ -487,7 +808,8 @@ function NewPaymentForm() {
               disabled={
                 saving ||
                 !tenantId ||
-                !leaseId
+                !leaseId ||
+                !billId
               }
               className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
             >

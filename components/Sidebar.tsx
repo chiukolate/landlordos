@@ -20,6 +20,11 @@ const navigation = [
     icon: "♙",
   },
   {
+    name: "Bills",
+    href: "/bills",
+    icon: "▤",
+  },
+  {
     name: "Payments",
     href: "/payments",
     icon: "₱",
