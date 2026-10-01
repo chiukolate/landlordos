@@ -79,6 +79,10 @@ export default function NewBillPage() {
     (unit) => unit.property_id === propertyId
   );
 
+  const selectedUnit = units.find(
+    (unit) => unit.id === unitId
+  );
+
   const previous =
     electricityBefore === "" ? null : Number(electricityBefore);
 
@@ -105,6 +109,15 @@ export default function NewBillPage() {
   const totalAmountDue =
     rent + electricityAmount;
 
+  function formatBillingMonth(value: string) {
+    const date = new Date(`${value}-01T00:00:00`);
+
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+  }
+
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
   ) {
@@ -118,6 +131,11 @@ export default function NewBillPage() {
       rentAmount === ""
     ) {
       setError("Please complete the required fields.");
+      return;
+    }
+
+    if (rent < 0) {
+      setError("Rent amount cannot be negative.");
       return;
     }
 
@@ -157,6 +175,21 @@ export default function NewBillPage() {
       return;
     }
 
+    // The final electricity amount and total due cannot be negative.
+    if (electricityAmount < 0) {
+      setError(
+        `The adjustment of ₱${adjustmentValue.toFixed(2)} is larger than the electricity charge of ₱${electricityCharge.toFixed(2)}, which would make the electricity bill negative. Please check the adjustment amount.`
+      );
+      return;
+    }
+
+    if (totalAmountDue < 0) {
+      setError(
+        "The total amount due cannot be negative. Please check the rent and adjustment amounts."
+      );
+      return;
+    }
+
     setSaving(true);
 
     const { error: insertError } = await supabase
@@ -188,7 +221,21 @@ export default function NewBillPage() {
       });
 
     if (insertError) {
-      setError(insertError.message);
+      // 23505 = unique violation (one bill per unit per month).
+      if (insertError.code === "23505") {
+        setError(
+          `A bill for ${
+            selectedUnit
+              ? `Unit ${selectedUnit.unit_number}`
+              : "this unit"
+          } already exists for ${formatBillingMonth(
+            billingMonth
+          )}. Choose a different month, or check the Bills page.`
+        );
+      } else {
+        setError(insertError.message);
+      }
+
       setSaving(false);
       return;
     }
