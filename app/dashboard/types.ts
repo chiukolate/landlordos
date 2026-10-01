@@ -8,6 +8,7 @@ export type Unit = {
   id: string;
   property_id: string;
   unit_number: string;
+  floor: string;
   monthly_rent: number | null;
   status: string;
 };

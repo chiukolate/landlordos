@@ -13,7 +13,7 @@ export default async function Dashboard() {
 
   const { data: units, error: unitsError } = await supabase
     .from("units")
-    .select("id, property_id, unit_number, monthly_rent, status")
+    .select("id, property_id, unit_number, floor, monthly_rent, status")
     .order("unit_number");
 
   const { data: activeLeases, error: leasesError } =
