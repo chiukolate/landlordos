@@ -4,6 +4,19 @@ import { supabase } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 
 export default async function BillsPage() {
+  const formatBillingMonth = (value: string | null) => {
+    if (!value) {
+      return "—";
+    }
+
+    const date = new Date(`${value}T00:00:00`);
+
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+  };
+
   const { data: bills, error } = await supabase
     .from("monthly_bills")
     .select(
@@ -143,12 +156,12 @@ export default async function BillsPage() {
                     return (
                       <tr key={bill.id}>
                         <td className="px-4 py-3 font-medium text-gray-900">
-                          {new Date(
-                            `${bill.billing_month}T00:00:00`
-                          ).toLocaleDateString("en-US", {
-                            month: "long",
-                            year: "numeric",
-                          })}
+                          <Link
+                            href={`/bills/${bill.id}`}
+                            className="hover:underline"
+                          >
+                            {formatBillingMonth(bill.billing_month)}
+                          </Link>
                         </td>
 
                         <td className="px-4 py-3 text-gray-600">
