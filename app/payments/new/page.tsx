@@ -147,7 +147,7 @@ function NewPaymentForm() {
 
   useEffect(() => {
     async function loadBills() {
-      if (!unitId) {
+      if (!unitId || !tenantId || !leaseId) {
         setBills([]);
         setBillId("");
         return;
@@ -171,6 +171,8 @@ function NewPaymentForm() {
           `
         )
         .eq("unit_id", unitId)
+        .eq("tenant_id", tenantId)
+        .eq("lease_id", leaseId)
         .order("billing_month", {
           ascending: false,
         });
@@ -188,7 +190,7 @@ function NewPaymentForm() {
     }
 
     loadBills();
-  }, [unitId]);
+  }, [unitId, tenantId, leaseId]);
 
   // When a bill is selected, load the payments already linked to it,
   // then default the Payment Amount to the remaining balance.
@@ -661,7 +663,7 @@ function NewPaymentForm() {
                     : !unitId
                       ? "Select an active lease first"
                       : bills.length === 0
-                        ? "No monthly bills for this unit"
+                        ? "No monthly bills for this tenant and lease"
                         : "Select monthly bill"}
                 </option>
 

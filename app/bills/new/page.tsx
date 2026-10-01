@@ -14,12 +14,28 @@ type Unit = {
   unit_number: string;
 };
 
+type Lease = {
+  id: string;
+  tenant_id: string;
+  unit_id: string;
+  start_date: string;
+  end_date: string | null;
+  monthly_rent: number;
+  status: string;
+  tenant: {
+    first_name: string;
+    last_name: string;
+  } | null;
+};
+
 export default function NewBillPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [leases, setLeases] = useState<Lease[]>([]);
 
   const [propertyId, setPropertyId] = useState("");
   const [unitId, setUnitId] = useState("");
+  const [leaseId, setLeaseId] = useState("");
   const [billingMonth, setBillingMonth] = useState("");
 
   const [rentAmount, setRentAmount] = useState("");
@@ -35,6 +51,7 @@ export default function NewBillPage() {
   const [notes, setNotes] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [loadingLeases, setLoadingLeases] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -75,12 +92,92 @@ export default function NewBillPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    async function loadLeases() {
+      if (!unitId) {
+        setLeases([]);
+        setLeaseId("");
+        return;
+      }
+
+      setLoadingLeases(true);
+      setError("");
+
+      const { data, error: leaseError } = await supabase
+        .from("leases")
+        .select(
+          `
+            id,
+            tenant_id,
+            unit_id,
+            start_date,
+            end_date,
+            monthly_rent,
+            status,
+            tenants (
+              first_name,
+              last_name
+            )
+          `
+        )
+        .eq("unit_id", unitId)
+        .order("start_date", {
+          ascending: false,
+        });
+
+      if (leaseError) {
+        setError(leaseError.message);
+        setLeases([]);
+        setLeaseId("");
+        setLoadingLeases(false);
+        return;
+      }
+
+      const normalizedLeases: Lease[] = (data ?? []).map(
+        (lease) => ({
+          id: lease.id,
+          tenant_id: lease.tenant_id,
+          unit_id: lease.unit_id,
+          start_date: lease.start_date,
+          end_date: lease.end_date,
+          monthly_rent: Number(lease.monthly_rent),
+          status: lease.status,
+          tenant: Array.isArray(lease.tenants)
+            ? lease.tenants[0] ?? null
+            : lease.tenants ?? null,
+        })
+      );
+
+      setLeases(normalizedLeases);
+
+      const activeLease = normalizedLeases.find(
+        (lease) => lease.status === "ACTIVE"
+      );
+
+      if (activeLease) {
+        setLeaseId(activeLease.id);
+        setRentAmount(String(activeLease.monthly_rent));
+      } else {
+        setLeaseId("");
+        setRentAmount("");
+      }
+
+      setLoadingLeases(false);
+    }
+
+    loadLeases();
+  }, [unitId]);
+
   const filteredUnits = units.filter(
     (unit) => unit.property_id === propertyId
   );
 
   const selectedUnit = units.find(
     (unit) => unit.id === unitId
+  );
+
+  const selectedLease = leases.find(
+    (lease) => lease.id === leaseId
   );
 
   const previous =
@@ -118,6 +215,16 @@ export default function NewBillPage() {
     });
   }
 
+  function formatDate(value: string) {
+    const date = new Date(`${value}T00:00:00`);
+
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
   ) {
@@ -127,6 +234,7 @@ export default function NewBillPage() {
     if (
       !propertyId ||
       !unitId ||
+      !leaseId ||
       !billingMonth ||
       rentAmount === ""
     ) {
@@ -175,7 +283,6 @@ export default function NewBillPage() {
       return;
     }
 
-    // The final electricity amount and total due cannot be negative.
     if (electricityAmount < 0) {
       setError(
         `The adjustment of ₱${adjustmentValue.toFixed(2)} is larger than the electricity charge of ₱${electricityCharge.toFixed(2)}, which would make the electricity bill negative. Please check the adjustment amount.`
@@ -190,6 +297,11 @@ export default function NewBillPage() {
       return;
     }
 
+    if (!selectedLease) {
+      setError("Please select a valid tenant and lease.");
+      return;
+    }
+
     setSaving(true);
 
     const { error: insertError } = await supabase
@@ -197,6 +309,8 @@ export default function NewBillPage() {
       .insert({
         property_id: propertyId,
         unit_id: unitId,
+        tenant_id: selectedLease.tenant_id,
+        lease_id: selectedLease.id,
         billing_month: `${billingMonth}-01`,
 
         rent_amount: rent,
@@ -221,7 +335,6 @@ export default function NewBillPage() {
       });
 
     if (insertError) {
-      // 23505 = unique violation (one bill per unit per month).
       if (insertError.code === "23505") {
         setError(
           `A bill for ${
@@ -281,6 +394,9 @@ export default function NewBillPage() {
             onChange={(event) => {
               setPropertyId(event.target.value);
               setUnitId("");
+              setLeaseId("");
+              setLeases([]);
+              setRentAmount("");
             }}
             className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             required
@@ -309,9 +425,11 @@ export default function NewBillPage() {
 
           <select
             value={unitId}
-            onChange={(event) =>
-              setUnitId(event.target.value)
-            }
+            onChange={(event) => {
+              setUnitId(event.target.value);
+              setLeaseId("");
+              setRentAmount("");
+            }}
             className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             required
             disabled={!propertyId}
@@ -329,6 +447,77 @@ export default function NewBillPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* TENANT / LEASE */}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Tenant / Lease
+          </label>
+
+          <select
+            value={leaseId}
+            onChange={(event) => {
+              const newLeaseId = event.target.value;
+
+              setLeaseId(newLeaseId);
+
+              const lease = leases.find(
+                (item) => item.id === newLeaseId
+              );
+
+              if (lease) {
+                setRentAmount(
+                  String(lease.monthly_rent)
+                );
+              }
+            }}
+            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            required
+            disabled={!unitId || loadingLeases}
+          >
+            <option value="">
+              {loadingLeases
+                ? "Loading leases..."
+                : leases.length === 0
+                ? "No leases found for this unit"
+                : "Select tenant / lease"}
+            </option>
+
+            {leases.map((lease) => {
+              const tenantName = lease.tenant
+                ? `${lease.tenant.first_name} ${lease.tenant.last_name}`
+                : "Unknown Tenant";
+
+              const dateRange = `${formatDate(
+                lease.start_date
+              )} - ${
+                lease.end_date
+                  ? formatDate(lease.end_date)
+                  : "Present"
+              }`;
+
+              return (
+                <option
+                  key={lease.id}
+                  value={lease.id}
+                >
+                  {tenantName} — {dateRange} —{" "}
+                  {lease.status}
+                </option>
+              );
+            })}
+          </select>
+
+          {selectedLease && (
+            <p className="mt-1 text-xs text-gray-500">
+              Selected tenant:{" "}
+              {selectedLease.tenant
+                ? `${selectedLease.tenant.first_name} ${selectedLease.tenant.last_name}`
+                : "Unknown Tenant"}
+            </p>
+          )}
         </div>
 
         {/* BILLING MONTH */}
@@ -368,6 +557,13 @@ export default function NewBillPage() {
             placeholder="0.00"
             required
           />
+
+          {selectedLease && (
+            <p className="mt-1 text-xs text-gray-500">
+              Lease rent: ₱
+              {selectedLease.monthly_rent.toFixed(2)}
+            </p>
+          )}
         </div>
 
         {/* ELECTRICITY */}
