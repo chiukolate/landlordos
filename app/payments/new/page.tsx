@@ -52,6 +52,11 @@ function NewPaymentForm() {
   const [loadingData, setLoadingData] = useState(true);
   const [loadingBills, setLoadingBills] = useState(false);
 
+  // Total already paid toward the selected bill.
+  const [alreadyPaid, setAlreadyPaid] = useState(0);
+  const [loadingBillPayments, setLoadingBillPayments] =
+    useState(false);
+
   const [tenantId, setTenantId] = useState(
     tenantIdFromUrl ?? ""
   );
@@ -185,6 +190,76 @@ function NewPaymentForm() {
     loadBills();
   }, [unitId]);
 
+  // When a bill is selected, load the payments already linked to it,
+  // then default the Payment Amount to the remaining balance.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBillPayments() {
+      if (!billId) {
+        setAlreadyPaid(0);
+        setLoadingBillPayments(false);
+        return;
+      }
+
+      const bill = bills.find(
+        (item) => item.id === billId
+      );
+
+      if (!bill) {
+        setAlreadyPaid(0);
+        setLoadingBillPayments(false);
+        return;
+      }
+
+      setLoadingBillPayments(true);
+
+      const { data, error } = await supabase
+        .from("payments")
+        .select("amount")
+        .eq("monthly_bill_id", billId);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        setError(
+          `Unable to load payments for this bill: ${error.message}`
+        );
+        setAlreadyPaid(0);
+        setLoadingBillPayments(false);
+        return;
+      }
+
+      const paid = (data ?? []).reduce(
+        (sum, payment) =>
+          sum + Number(payment.amount),
+        0
+      );
+
+      const remaining = Math.max(
+        Math.round(
+          (Number(bill.total_amount_due) - paid) *
+            100
+        ) / 100,
+        0
+      );
+
+      setAlreadyPaid(paid);
+      setAmount(
+        remaining > 0 ? remaining.toFixed(2) : ""
+      );
+      setLoadingBillPayments(false);
+    }
+
+    loadBillPayments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [billId, bills]);
+
   const selectedTenant = tenants.find(
     (tenant) => tenant.id === tenantId
   );
@@ -204,6 +279,17 @@ function NewPaymentForm() {
   const selectedBill = bills.find(
     (bill) => bill.id === billId
   );
+
+  const remainingBalance = selectedBill
+    ? Math.max(
+        Math.round(
+          (Number(selectedBill.total_amount_due) -
+            alreadyPaid) *
+            100
+        ) / 100,
+        0
+      )
+    : 0;
 
   function formatMonth(value: string) {
     const date = new Date(`${value}T00:00:00`);
@@ -267,18 +353,9 @@ function NewPaymentForm() {
 
     setBillId(newBillId);
 
-    const bill = bills.find(
-      (item) => item.id === newBillId
-    );
-
-    if (bill) {
-      setAmount(
-        String(bill.total_amount_due)
-      );
-    } else {
-      setAmount("");
-    }
-
+    // The amount is filled in with the remaining balance
+    // once this bill's existing payments have loaded.
+    setAmount("");
     setError("");
   }
 
@@ -679,6 +756,32 @@ function NewPaymentForm() {
                       )}
                     </span>
                   </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">
+                      Already Paid
+                    </span>
+
+                    <span className="font-medium text-gray-900">
+                      {loadingBillPayments
+                        ? "Loading..."
+                        : formatCurrency(alreadyPaid)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between border-t border-gray-200 pt-2">
+                    <span className="font-medium text-gray-900">
+                      Remaining Balance
+                    </span>
+
+                    <span className="font-semibold text-gray-900">
+                      {loadingBillPayments
+                        ? "Loading..."
+                        : formatCurrency(
+                            remainingBalance
+                          )}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -706,7 +809,7 @@ function NewPaymentForm() {
               />
 
               <p className="mt-1 text-xs text-gray-500">
-                The amount can be less than the bill total for a partial payment.
+                Defaults to the remaining balance. Enter a smaller amount for a partial payment.
               </p>
             </div>
 
@@ -807,6 +910,7 @@ function NewPaymentForm() {
               type="submit"
               disabled={
                 saving ||
+                loadingBillPayments ||
                 !tenantId ||
                 !leaseId ||
                 !billId
