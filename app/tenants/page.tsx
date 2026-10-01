@@ -69,8 +69,15 @@ export default async function TenantsPage() {
     );
   }
 
-  const activeLeases = ((leases ?? []) as Lease[]).filter(
+  const allLeases = (leases ?? []) as Lease[];
+
+  const activeLeases = allLeases.filter(
     (lease) => lease.status === "ACTIVE"
+  );
+
+  // Tenants who have at least one lease of any status.
+  const leasedTenantIds = new Set(
+    allLeases.map((lease) => lease.tenant_id)
   );
 
   const activeTenantIds = new Set(
@@ -95,9 +102,18 @@ export default async function TenantsPage() {
       activeTenantIds.has(tenant.id)
     ) ?? [];
 
+  // Had a lease before, but none is active now.
   const previousTenants =
     (tenants as Tenant[] | null)?.filter(
-      (tenant) => !activeTenantIds.has(tenant.id)
+      (tenant) =>
+        leasedTenantIds.has(tenant.id) &&
+        !activeTenantIds.has(tenant.id)
+    ) ?? [];
+
+  // Never had a lease at all.
+  const unassignedTenants =
+    (tenants as Tenant[] | null)?.filter(
+      (tenant) => !leasedTenantIds.has(tenant.id)
     ) ?? [];
 
   function TenantTable({
@@ -269,8 +285,7 @@ export default async function TenantsPage() {
             </div>
 
             <p className="mt-1 text-sm text-gray-500">
-              Tenants who do not currently have an active
-              lease.
+              Tenants whose leases have all ended.
             </p>
           </div>
 
@@ -285,6 +300,39 @@ export default async function TenantsPage() {
               <p className="mt-1 text-sm text-gray-500">
                 Previous tenants will appear here after their
                 leases end.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* Unassigned Tenants */}
+        <section className="mt-10">
+          <div className="mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Unassigned Tenants
+              </h2>
+
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                {unassignedTenants.length}
+              </span>
+            </div>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Tenants who have not been given a lease yet.
+            </p>
+          </div>
+
+          {unassignedTenants.length > 0 ? (
+            <TenantTable tenantList={unassignedTenants} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
+              <p className="font-medium text-gray-900">
+                No unassigned tenants
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Tenants without any lease will appear here.
               </p>
             </div>
           )}
