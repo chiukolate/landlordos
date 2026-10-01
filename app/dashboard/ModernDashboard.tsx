@@ -221,6 +221,73 @@ export default function ModernDashboard({
             ))}
           </div>
         </section>
+
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Active Leases
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Current tenants and lease details.
+              </p>
+            </div>
+
+            <span className="text-sm font-medium text-slate-500">
+              {data.activeLeases.length} active
+            </span>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {data.activeLeases.map((lease) => {
+              const tenant = tenantById.get(lease.tenant_id);
+              const unit = data.propertyUnits.find(
+                (item) => item.id === lease.unit_id
+              );
+
+              return (
+                <div
+                  key={lease.id}
+                  className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      {tenant
+                        ? `${tenant.first_name} ${tenant.last_name}`
+                        : "Unknown tenant"}
+                    </p>
+
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      {unit ? `Unit ${unit.unit_number}` : "Unknown unit"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-slate-900">
+                        ₱{Number(lease.monthly_rent).toLocaleString()}
+                      </p>
+
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Monthly rent
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-slate-900">
+                        {new Date(lease.start_date).toLocaleDateString()}
+                      </p>
+
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Start date
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </main>
   );
