@@ -12,9 +12,15 @@ type Tenant = {
   created_at: string;
 };
 
+type LeaseUnit = {
+  unit_number: string;
+  floor: string | null;
+};
+
 type Lease = {
   tenant_id: string;
   status: string;
+  units: LeaseUnit | LeaseUnit[] | null;
 };
 
 export default async function TenantsPage() {
@@ -25,7 +31,16 @@ export default async function TenantsPage() {
 
   const { data: leases, error: leasesError } = await supabase
     .from("leases")
-    .select("tenant_id, status");
+    .select(
+      `
+        tenant_id,
+        status,
+        units (
+          unit_number,
+          floor
+        )
+      `
+    );
 
   if (tenantsError || leasesError) {
     const errorMessage =
@@ -54,11 +69,26 @@ export default async function TenantsPage() {
     );
   }
 
-  const activeTenantIds = new Set(
-    (leases ?? [])
-      .filter((lease: Lease) => lease.status === "ACTIVE")
-      .map((lease: Lease) => lease.tenant_id)
+  const activeLeases = ((leases ?? []) as Lease[]).filter(
+    (lease) => lease.status === "ACTIVE"
   );
+
+  const activeTenantIds = new Set(
+    activeLeases.map((lease) => lease.tenant_id)
+  );
+
+  // Map each tenant to the unit on their active lease.
+  const unitByTenantId = new Map<string, LeaseUnit>();
+
+  for (const lease of activeLeases) {
+    const unit = Array.isArray(lease.units)
+      ? lease.units[0]
+      : lease.units;
+
+    if (unit) {
+      unitByTenantId.set(lease.tenant_id, unit);
+    }
+  }
 
   const activeTenants =
     (tenants as Tenant[] | null)?.filter((tenant) =>
@@ -72,8 +102,10 @@ export default async function TenantsPage() {
 
   function TenantTable({
     tenantList,
+    showUnit = false,
   }: {
     tenantList: Tenant[];
+    showUnit?: boolean;
   }) {
     return (
       <div className="overflow-hidden rounded-xl bg-white shadow-sm">
@@ -83,6 +115,12 @@ export default async function TenantsPage() {
               <th className="px-6 py-4 font-medium text-gray-600">
                 Name
               </th>
+
+              {showUnit && (
+                <th className="px-6 py-4 font-medium text-gray-600">
+                  Unit
+                </th>
+              )}
 
               <th className="px-6 py-4 font-medium text-gray-600">
                 Phone
@@ -99,32 +137,58 @@ export default async function TenantsPage() {
           </thead>
 
           <tbody className="divide-y divide-gray-200">
-            {tenantList.map((tenant) => (
-              <tr key={tenant.id}>
-                <td className="px-6 py-4">
-                  <Link
-                    href={`/tenants/${tenant.id}`}
-                    className="font-medium text-gray-900 hover:underline"
-                  >
-                    {tenant.first_name} {tenant.last_name}
-                  </Link>
-                </td>
+            {tenantList.map((tenant) => {
+              const unit = unitByTenantId.get(tenant.id);
 
-                <td className="px-6 py-4 text-gray-600">
-                  {tenant.phone || "—"}
-                </td>
+              return (
+                <tr key={tenant.id}>
+                  <td className="px-6 py-4">
+                    <Link
+                      href={`/tenants/${tenant.id}`}
+                      className="font-medium text-gray-900 hover:underline"
+                    >
+                      {tenant.first_name} {tenant.last_name}
+                    </Link>
+                  </td>
 
-                <td className="px-6 py-4 text-gray-600">
-                  {tenant.email || "—"}
-                </td>
+                  {showUnit && (
+                    <td className="px-6 py-4">
+                      {unit ? (
+                        <>
+                          <p className="font-medium text-gray-900">
+                            Unit {unit.unit_number}
+                          </p>
 
-                <td className="px-6 py-4 text-gray-600">
-                  {new Date(
-                    tenant.created_at
-                  ).toLocaleDateString()}
-                </td>
-              </tr>
-            ))}
+                          {unit.floor && (
+                            <p className="text-xs text-gray-500">
+                              {unit.floor}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-gray-600">
+                          —
+                        </span>
+                      )}
+                    </td>
+                  )}
+
+                  <td className="px-6 py-4 text-gray-600">
+                    {tenant.phone || "—"}
+                  </td>
+
+                  <td className="px-6 py-4 text-gray-600">
+                    {tenant.email || "—"}
+                  </td>
+
+                  <td className="px-6 py-4 text-gray-600">
+                    {new Date(
+                      tenant.created_at
+                    ).toLocaleDateString()}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -173,7 +237,10 @@ export default async function TenantsPage() {
           </div>
 
           {activeTenants.length > 0 ? (
-            <TenantTable tenantList={activeTenants} />
+            <TenantTable
+              tenantList={activeTenants}
+              showUnit
+            />
           ) : (
             <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
               <p className="font-medium text-gray-900">
