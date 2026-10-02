@@ -94,6 +94,10 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  if (pathname === "/login") {
+    return null;
+  }
+
   return (
     <>
       <aside className="hidden min-h-screen w-64 shrink-0 flex-col border-r border-gray-200 bg-white md:flex">
