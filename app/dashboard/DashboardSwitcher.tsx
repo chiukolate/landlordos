@@ -43,7 +43,7 @@ export default function DashboardSwitcher({
 
   return (
     <>
-      <div className="fixed right-6 top-6 z-50">
+      <div className="fixed right-3 top-2 z-50 md:right-6 md:top-6">
         <div className="flex items-center rounded-full border border-gray-200 bg-white p-1 shadow-sm">
           <button
             type="button"

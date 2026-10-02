@@ -45,9 +45,6 @@ export default function ModernDashboard({
                 </p>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-medium text-slate-300">
-                Modern
-              </div>
             </div>
 
             <div className="mt-10">
@@ -228,15 +225,7 @@ export default function ModernDashboard({
               {data.property.address}
             </p>
 
-            <div className="mt-8 grid grid-cols-2 gap-6 border-t border-slate-100 pt-5">
-              <div>
-                <p className="text-xs font-medium text-slate-400">Units</p>
-
-                <p className="mt-2 text-2xl font-normal text-slate-950">
-                  {data.propertyUnits.length}
-                </p>
-              </div>
-
+            <div className="mt-8 border-t border-slate-100 pt-5">
               <div>
                 <p className="text-xs font-medium text-slate-400">
                   Active leases
